@@ -44,6 +44,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "(useful for debugging/testing purposes)",
     )
     parser.add_argument(
+        "--log-file",
+        help="Redirect logs to the given file instead of writing to stderr",
+    )
+    parser.add_argument(
         "--log-level",
         choices=list(LOG_LEVEL_DICT.keys())
         + list(map(lambda level: level.upper(), LOG_LEVEL_DICT.keys())),
@@ -65,7 +69,7 @@ def main() -> None:
 
     log_level = loglevel_from_str(args.log_level[0])
     logging.basicConfig(
-        filename="salt-server.log",
+        filename=args.log_file,
         level=log_level,
         filemode="w",
     )
@@ -76,7 +80,7 @@ def main() -> None:
         states: Dict[str, StateNameCompletion] = pickle.load(states_file)
 
     salt_server = SaltServer()
-    setup_salt_server_capabilities(salt_server)
+    setup_salt_server_capabilities(salt_server, log_level)
     salt_server.post_init(states, log_level, args.integration_tests)
 
     if args.stop_after_init:

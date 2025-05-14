@@ -161,7 +161,7 @@ class SaltServer(LanguageServer):
         return None
 
 
-def setup_salt_server_capabilities(server: SaltServer) -> None:
+def setup_salt_server_capabilities(server: SaltServer, log_level: Optional[int]) -> None:
     """Adds the completion, goto definition and document symbol capabilities to
     the provided server.
     """
@@ -170,7 +170,7 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
     def initialize(params: InitializeParams) -> None:
         """Set up custom workspace."""
         del params  # not needed
-        server.lsp.setup_custom_workspace()  # type: ignore
+        server.lsp.setup_custom_workspace(log_level)  # type: ignore
         server.logger.debug("Replaced workspace with SlsFileWorkspace")
 
     @server.feature(

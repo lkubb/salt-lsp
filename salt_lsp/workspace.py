@@ -2,7 +2,7 @@
 contents utilizing the existing Workspace implementation from pygls.
 
 """
-from logging import getLogger, Logger, DEBUG
+from logging import WARNING, getLogger, Logger, DEBUG
 from pathlib import Path
 import sys
 from typing import List, Optional, Union
@@ -43,7 +43,7 @@ class SlsFileWorkspace(Workspace):
     """
 
     def __init__(
-        self, state_name_completions: CompletionsDict, *args, **kwargs
+        self, state_name_completions: CompletionsDict, *args, log_level: Optional[int] = None, **kwargs
     ) -> None:
         #: dictionary containing the parsed contents of all tracked documents
         self._trees: UriDict[Tree] = UriDict()
@@ -60,7 +60,7 @@ class SlsFileWorkspace(Workspace):
 
         self.logger: Logger = getLogger(self.__class__.__name__)
         # FIXME: make this configurable
-        self.logger.setLevel(DEBUG)
+        self.logger.setLevel(log_level or WARNING)
 
         super().__init__(*args, **kwargs)
 
@@ -201,7 +201,7 @@ class SaltLspProto(LanguageServerProtocol):
 
     _workspace: SlsFileWorkspace
 
-    def setup_custom_workspace(self):
+    def setup_custom_workspace(self, log_level: Optional[int]) -> None:
         """Replace self.workspace with an instance of SlsFileWorkspace
 
         This function is only supposed to be called when handling an
@@ -214,4 +214,5 @@ class SaltLspProto(LanguageServerProtocol):
                 old_ws.root_uri,
                 self._server._text_document_sync_kind,
                 old_ws.folders.values(),
+                log_level=log_level,
             )

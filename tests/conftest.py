@@ -509,6 +509,8 @@ def pickled_states(_pickled_path, state_completions):
         server_command=[
             sys.executable,
             "salt_lsp/__main__.py",
+            "--log-level",
+            "debug",
             "--integration-tests",
         ]
     ),
