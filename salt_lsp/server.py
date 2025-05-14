@@ -7,25 +7,29 @@ import re
 from os.path import basename
 from typing import Dict, List, Optional, Sequence, Tuple, Union, cast
 
-from pygls.lsp import types
-from pygls.lsp.methods import (
-    COMPLETION,
+from lsprotocol.types import (
+    TEXT_DOCUMENT_COMPLETION,
     INITIALIZE,
     TEXT_DOCUMENT_DID_OPEN,
-    DEFINITION,
-    DOCUMENT_SYMBOL,
-)
-from pygls.lsp.types import (
+    TEXT_DOCUMENT_DEFINITION,
+    TEXT_DOCUMENT_DOCUMENT_SYMBOL,
     CompletionItem,
     CompletionList,
     CompletionOptions,
     CompletionParams,
+    DeclarationParams,
+    DidOpenTextDocumentParams,
+    DocumentSymbol,
+    DocumentSymbolParams,
     InitializeParams,
+    Location,
+    SymbolInformation,
 )
 from pygls.server import LanguageServer
 
+from salt_lsp import __version__
 from salt_lsp import utils
-from salt_lsp.base_types import StateNameCompletion, SLS_LANGUAGE_ID
+from salt_lsp.base_types import StateNameCompletion
 from salt_lsp.workspace import SaltLspProto, SlsFileWorkspace
 from salt_lsp.parser import (
     IncludesNode,
@@ -41,12 +45,15 @@ class SaltServer(LanguageServer):
     LINE_START_REGEX = re.compile(r"^(\s*)\b", re.MULTILINE)
 
     def __init__(self) -> None:
-        super().__init__(protocol_cls=SaltLspProto)
+        super().__init__(
+            name="SaltServer", version=__version__, protocol_cls=SaltLspProto
+        )
 
         self._state_name_completions: Dict[str, StateNameCompletion] = {}
 
         self.logger: logging.Logger = logging.getLogger()
         self._state_names: List[str] = []
+        self.integration_tests: bool = False
 
     @property
     def workspace(self) -> SlsFileWorkspace:
@@ -59,7 +66,8 @@ class SaltServer(LanguageServer):
     def post_init(
         self,
         state_name_completions: Dict[str, StateNameCompletion],
-        log_level=logging.DEBUG,
+        log_level: int = logging.DEBUG,
+        integration_tests: bool = False,
     ) -> None:
         """Further initialisation, called after
         setup_salt_server_capabilities."""
@@ -67,9 +75,10 @@ class SaltServer(LanguageServer):
         self._state_names = list(state_name_completions.keys())
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
+        self.integration_tests = integration_tests
 
     def complete_state_name(
-        self, params: types.CompletionParams
+        self, params: CompletionParams
     ) -> List[Tuple[str, Optional[str]]]:
         """Complete state name at current position"""
         assert (
@@ -77,7 +86,7 @@ class SaltServer(LanguageServer):
             and params.context.trigger_character == "."
         )
 
-        doc = self.workspace.get_document(params.text_document.uri)
+        doc = self.workspace.get_text_document(params.text_document.uri)
         contents = doc.source
         ind = doc.offset_at_position(params.position)
         last_match = utils.get_last_element_of_iterator(
@@ -100,7 +109,7 @@ class SaltServer(LanguageServer):
 
     def find_id_in_doc_and_includes(
         self, id_to_find: str, starting_uri: str
-    ) -> Optional[types.Location]:
+    ) -> Optional[Location]:
         """Finds the first matching location of the given id in the document or
         in its includes.
 
@@ -147,10 +156,7 @@ class SaltServer(LanguageServer):
                 self.logger.debug(
                     "found match at '%s', '%s", lsp_range.start, lsp_range.end
                 )
-                return types.Location(
-                    uri=str(uri),
-                    range=lsp_range,
-                )
+                return Location(uri=str(uri), range=lsp_range)
 
         return None
 
@@ -164,11 +170,12 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
     def initialize(params: InitializeParams) -> None:
         """Set up custom workspace."""
         del params  # not needed
-        server.lsp.setup_custom_workspace()
+        server.lsp.setup_custom_workspace()  # type: ignore
         server.logger.debug("Replaced workspace with SlsFileWorkspace")
 
     @server.feature(
-        COMPLETION, CompletionOptions(trigger_characters=["-", "."])
+        TEXT_DOCUMENT_COMPLETION,
+        CompletionOptions(trigger_characters=["-", "."]),
     )
     def completions(
         salt_server: SaltServer, params: CompletionParams
@@ -210,10 +217,10 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
             )
         return None
 
-    @server.feature(DEFINITION)
+    @server.feature(TEXT_DOCUMENT_DEFINITION)
     def goto_definition(
-        salt_server: SaltServer, params: types.DeclarationParams
-    ) -> Optional[types.Location]:
+        salt_server: SaltServer, params: DeclarationParams
+    ) -> Optional[Location]:
         uri = params.text_document.uri
         if (tree := salt_server.workspace.trees.get(uri)) is None:
             return None
@@ -223,37 +230,36 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
         if not isinstance(path[-1], RequisiteNode):
             return None
 
-        if (id_to_find := cast(RequisiteNode, path[-1]).reference) is None:
+        if (id_to_find := path[-1].reference) is None:
             return None
 
         return salt_server.find_id_in_doc_and_includes(id_to_find, uri)
 
     @server.feature(TEXT_DOCUMENT_DID_OPEN)
     def did_open(
-        salt_server: SaltServer, params: types.DidOpenTextDocumentParams
-    ) -> Optional[types.TextDocumentItem]:
+        salt_server: SaltServer, params: DidOpenTextDocumentParams
+    ) -> None:
         """Text document did open notification.
 
         This function registers the newly opened file with the salt server.
         """
+        if not salt_server.integration_tests:
+            # The file is registered by the parent class, this is only used
+            # to make integration tests performant while still passing
+            return
         salt_server.logger.debug(
             "adding text document '%s' to the workspace",
             params.text_document.uri,
         )
-        doc = salt_server.workspace.get_document(params.text_document.uri)
-        return types.TextDocumentItem(
-            uri=params.text_document.uri,
-            language_id=SLS_LANGUAGE_ID,
-            text=params.text_document.text or "",
-            version=doc.version,
-        )
+        # Ensure the document is finished loading
+        salt_server.workspace.get_text_document(params.text_document.uri)
+        # Notify the testing client
+        salt_server.send_notification("saltLsp/loadingFinished")
 
-    @server.feature(DOCUMENT_SYMBOL)
+    @server.feature(TEXT_DOCUMENT_DOCUMENT_SYMBOL)
     def document_symbol(
-        salt_server: SaltServer, params: types.DocumentSymbolParams
-    ) -> Optional[
-        Union[List[types.DocumentSymbol], List[types.SymbolInformation]]
-    ]:
+        salt_server: SaltServer, params: DocumentSymbolParams
+    ) -> Optional[Union[List[DocumentSymbol], List[SymbolInformation]]]:
         return salt_server.workspace.document_symbols.get(
             params.text_document.uri, []
         )

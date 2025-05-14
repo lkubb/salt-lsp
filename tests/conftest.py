@@ -1,24 +1,18 @@
-import asyncio
-from threading import Thread
-import os
+import contextlib
+from pathlib import Path
+import pickle
+import sys
 
-from pygls.lsp.methods import (
-    EXIT,
-    INITIALIZE,
-    TEXT_DOCUMENT_DID_OPEN,
-    SHUTDOWN,
-)
-from pygls.lsp.types import (
+from lsprotocol.types import (
     ClientCapabilities,
     InitializeParams,
     DidOpenTextDocumentParams,
     TextDocumentItem,
 )
-from pygls.server import LanguageServer
 import pytest
+import pytest_lsp
 
-from salt_lsp.base_types import StateNameCompletion
-from salt_lsp.server import SaltServer, setup_salt_server_capabilities
+from salt_lsp.base_types import StateNameCompletion, SLS_LANGUAGE_ID
 
 
 MODULE_DOCS = {
@@ -473,7 +467,7 @@ CALL_TIMEOUT = 5
 
 
 @pytest.fixture
-def file_name_completer():
+def state_completions() -> dict[str, StateNameCompletion]:
     return {
         "file": StateNameCompletion(
             "file",
@@ -483,66 +477,68 @@ def file_name_completer():
     }
 
 
-@pytest.fixture
-def salt_client_server():
-    scr, scw = os.pipe()
-    csr, csw = os.pipe()
-
-    server = SaltServer()
-    setup_salt_server_capabilities(server)
-    server.post_init(FILE_NAME_COMPLETER)
-
-    server_thread = Thread(
-        target=server.start_io,
-        args=(os.fdopen(csr, "rb"), os.fdopen(scw, "wb")),
+@pytest.fixture(scope="session")
+def _pickled_path():
+    pickle_path = (
+        Path(__file__).parent.parent / "salt_lsp" / "data" / "states.pickle"
     )
-    server_thread.daemon = True
-    client = LanguageServer(asyncio.new_event_loop())
-    client_thread = Thread(
-        target=client.start_io,
-        args=(os.fdopen(scr, "rb"), os.fdopen(csw, "wb")),
-    )
-    client_thread.daemon = True
-
-    server_thread.start()
-    server.thread_id = server_thread.ident
-
-    client_thread.start()
-
-    response = client.lsp.send_request(
-        INITIALIZE,
-        InitializeParams(
-            process_id=12345,
-            root_uri="file://",
-            capabilities=ClientCapabilities(),
-        ),
-    ).result(timeout=CALL_TIMEOUT)
-
-    assert "capabilities" in response
-
-    yield client, server
-
-    shutdown_response = client.lsp.send_request(SHUTDOWN).result(
-        timeout=CALL_TIMEOUT
-    )
-    assert shutdown_response is None
-
-    # exit the server
-    client.lsp.notify(EXIT)
-    server_thread.join()
-
-    # exit the client
-    client._stop_event.set()
+    bak_path = None
+    if pickle_path.exists():
+        bak_path = pickle_path.with_suffix(".pickle.bak")
+        pickle_path.rename(bak_path)
     try:
-        client.loop._signal_handlers.clear()  # HACK ?
-    except AttributeError:
-        pass
-    client_thread.join()
+        yield pickle_path
+    finally:
+        pickle_path.unlink(missing_ok=True)
+        if bak_path:
+            bak_path.rename(pickle_path)
+
+
+@pytest.fixture
+def pickled_states(_pickled_path, state_completions):
+    with open(_pickled_path, "wb") as states_file:
+        pickle.dump(state_completions, states_file)
+    try:
+        yield _pickled_path
+    finally:
+        _pickled_path.unlink(missing_ok=True)
+
+
+@pytest_lsp.fixture(
+    config=pytest_lsp.ClientServerConfig(
+        server_command=[
+            sys.executable,
+            "salt_lsp/__main__.py",
+            "--integration-tests",
+        ]
+    ),
+    params=(None,),
+    ids=lambda x: x or "no_workspace",
+)
+async def client(
+    lsp_client: pytest_lsp.LanguageClient, pickled_states, request
+):
+    root_path = None
+    if request.param:
+        root_path = request.getfixturevalue(request.param)
+    params = InitializeParams(
+        capabilities=ClientCapabilities(), root_path=root_path
+    )
+    await lsp_client.initialize_session(params)
+
+    try:
+        yield
+    finally:
+        if not lsp_client.stopped:
+            await lsp_client.shutdown_session()
 
 
 @pytest.fixture()
-def sample_workspace(tmp_path):
-    with open(tmp_path / "top.sls", "w") as topfile:
+def sample_workspace(tmp_path: Path) -> Path:
+    workspace_path = tmp_path / "sample_workspace"
+    workspace_path.mkdir()
+
+    with open(workspace_path / "top.sls", "w") as topfile:
         topfile.write(
             """base:
   '*':
@@ -550,8 +546,8 @@ def sample_workspace(tmp_path):
 """
         )
 
-    opensuse = tmp_path / "opensuse"
-    (tmp_path / "opensuse").mkdir(parents=True)
+    opensuse = workspace_path / "opensuse"
+    (workspace_path / "opensuse").mkdir(parents=True)
     with open(opensuse / "init.sls", "w") as initfile:
         initfile.write(
             """include:
@@ -577,7 +573,7 @@ root:
 """
         )
 
-    dns_server = tmp_path / "dns" / "server"
+    dns_server = workspace_path / "dns" / "server"
     dns_server.mkdir(parents=True)
 
     with open(dns_server / "init.sls", "w") as initfile:
@@ -590,27 +586,37 @@ root:
 
     # from:
     # https://docs.saltproject.io/en/latest/ref/states/compiler_ordering.html#the-include-statement
-    with open(tmp_path / "foo.sls", "w") as foo_sls:
+    with open(workspace_path / "foo.sls", "w") as foo_sls:
         foo_sls.write(
             """include:
   - bar
   - baz
+
+foo:
+  test.nop:
+    - require:
+      - /root/.fishrc
 """
         )
-    with open(tmp_path / "bar.sls", "w") as bar_sls:
+    with open(workspace_path / "bar.sls", "w") as bar_sls:
         bar_sls.write(
             """include:
   - quo
+
+bar:
+  test.nop:
+    - require:
+      - /root/.fishrc
 """
         )
-    with open(tmp_path / "baz.sls", "w") as baz_sls:
+    with open(workspace_path / "baz.sls", "w") as baz_sls:
         baz_sls.write(
             """include:
   - qux
 """
         )
 
-    with open(tmp_path / "quo.sls", "w") as quo_file:
+    with open(workspace_path / "quo.sls", "w") as quo_file:
         quo_file.write(
             """/root/.fishrc:
   file.managed:
@@ -621,34 +627,23 @@ root:
 """
         )
 
-    yield tmp_path
+    yield workspace_path
 
 
-def open_workspace(
-    client: LanguageServer, root_uri: str, request_timeout: int = 5
-) -> None:
-    client.lsp.send_request(
-        INITIALIZE,
-        InitializeParams(
-            process_id=12345,
-            root_uri=root_uri,
-            capabilities=ClientCapabilities(),
-        ),
-    ).result(timeout=request_timeout)
-
-
-def open_file(
-    client: LanguageServer, file_path: str, request_timeout: int = 5
-) -> None:
-    with open(file_path) as base_sls:
-        client.lsp.send_request(
-            TEXT_DOCUMENT_DID_OPEN,
+@contextlib.asynccontextmanager
+async def open_file(
+    client: pytest_lsp.LanguageClient, file_path: Path
+) -> Path:
+    with open(file_path) as sls:
+        client.text_document_did_open(
             DidOpenTextDocumentParams(
                 text_document=TextDocumentItem(
-                    uri="file://" + file_path,
-                    language_id="sls",
+                    uri=f"file://{file_path}",
+                    language_id=SLS_LANGUAGE_ID,
                     version=0,
-                    text=base_sls.read(-1),
+                    text=sls.read(-1),
                 )
             ),
-        ).result(timeout=request_timeout)
+        )
+        await client.wait_for_notification("saltLsp/loadingFinished")
+        yield sls

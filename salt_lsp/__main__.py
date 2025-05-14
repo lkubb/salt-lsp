@@ -25,7 +25,7 @@ def loglevel_from_str(level: str) -> int:
     return LOG_LEVEL_DICT[level.lower()]
 
 
-def add_arguments(parser):
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.description = "salt state server"
 
     parser.add_argument(
@@ -51,9 +51,14 @@ def add_arguments(parser):
         nargs=1,
         help="Logging verbosity",
     )
+    parser.add_argument(
+        "--integration-tests",
+        action="store_true",
+        help="Indicate we're running integration tests",
+    )
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     add_arguments(parser)
     args = parser.parse_args()
@@ -72,7 +77,7 @@ def main():
 
     salt_server = SaltServer()
     setup_salt_server_capabilities(salt_server)
-    salt_server.post_init(states, log_level)
+    salt_server.post_init(states, log_level, args.integration_tests)
 
     if args.stop_after_init:
         return
