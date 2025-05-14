@@ -119,7 +119,7 @@ class SlsFileWorkspace(Workspace):
                     text_document_uri,
                 )
                 with open(inc.path, "r") as inc_file:
-                    self.put_document(
+                    self.put_text_document(
                         types.TextDocumentItem(
                             uri=str(inc),
                             language_id=SLS_LANGUAGE_ID,
@@ -135,7 +135,7 @@ class SlsFileWorkspace(Workspace):
         assert len(new_includes) >= len(self._includes[text_document_uri])
         self._includes[text_document_uri] = new_includes
 
-    def _update_document(
+    def _update_text_document(
         self,
         text_document: Union[
             types.TextDocumentItem, types.VersionedTextDocumentIdentifier
@@ -143,7 +143,7 @@ class SlsFileWorkspace(Workspace):
     ) -> None:
         self.logger.debug("updating document '%s'", text_document.uri)
         uri = text_document.uri
-        tree = parse(self.get_document(uri).source)
+        tree = parse(self.get_text_document(uri).source)
         self._trees[uri] = tree
 
         self._document_symbols[uri] = tree_to_document_symbols(
@@ -157,7 +157,7 @@ class SlsFileWorkspace(Workspace):
             if is_relative_to(
                 Path(FileUri(uri).path), Path(FileUri(workspace_uri).path)
             ):
-                return workspace_uri
+                return FileUri(workspace_uri)
 
         return self.root_uri
 
@@ -172,22 +172,26 @@ class SlsFileWorkspace(Workspace):
         super().remove_folder(str(folder_uri))
         self._top_paths.pop(FileUri(folder_uri))
 
-    def update_document(
+    def update_text_document(
         self,
-        text_document: types.VersionedTextDocumentIdentifier,
+        text_doc: types.VersionedTextDocumentIdentifier,
         change: types.TextDocumentContentChangeEvent,
     ) -> None:
-        super().update_document(text_document, change)
-        self._update_document(text_document)
+        super().update_text_document(text_doc, change)
+        self._update_text_document(text_doc)
 
-    def remove_document(self, doc_uri: str) -> None:
-        super().remove_document(doc_uri)
+    def remove_text_document(self, doc_uri: str) -> None:
+        super().remove_text_document(doc_uri)
         self._document_symbols.pop(FileUri(doc_uri))
         self._trees.pop(FileUri(doc_uri))
 
-    def put_document(self, text_document: types.TextDocumentItem) -> None:
-        super().put_document(text_document)
-        self._update_document(text_document)
+    def put_text_document(
+        self,
+        text_document: types.TextDocumentItem,
+        notebook_uri: Optional[str] = None,
+    ) -> None:
+        super().put_text_document(text_document, notebook_uri)
+        self._update_text_document(text_document)
 
 
 class SaltLspProto(LanguageServerProtocol):
@@ -195,7 +199,7 @@ class SaltLspProto(LanguageServerProtocol):
     instance.
     """
 
-    workspace: SlsFileWorkspace
+    _workspace: SlsFileWorkspace
 
     def setup_custom_workspace(self):
         """Replace self.workspace with an instance of SlsFileWorkspace
@@ -205,9 +209,9 @@ class SaltLspProto(LanguageServerProtocol):
         """
         if not isinstance(self.workspace, SlsFileWorkspace):
             old_ws = self.workspace
-            self.workspace = SlsFileWorkspace(
+            self._workspace = SlsFileWorkspace(
                 self._server._state_name_completions,
                 old_ws.root_uri,
-                self._server.sync_kind,
+                self._server._text_document_sync_kind,
                 old_ws.folders.values(),
             )

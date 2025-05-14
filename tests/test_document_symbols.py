@@ -29,8 +29,8 @@ touch /var/log:
 TREE = parse(SLS_FILE)
 
 
-def test_document_symbols(file_name_completer):
-    doc_symbols = tree_to_document_symbols(TREE, file_name_completer)
+def test_document_symbols(state_completions):
+    doc_symbols = tree_to_document_symbols(TREE, state_completions)
 
     assert doc_symbols == [
         types.DocumentSymbol(

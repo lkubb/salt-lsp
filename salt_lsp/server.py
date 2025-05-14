@@ -24,13 +24,12 @@ from lsprotocol.types import (
     InitializeParams,
     Location,
     SymbolInformation,
-    TextDocumentItem,
 )
 from pygls.server import LanguageServer
 
 from salt_lsp import __version__
 from salt_lsp import utils
-from salt_lsp.base_types import StateNameCompletion, SLS_LANGUAGE_ID
+from salt_lsp.base_types import StateNameCompletion
 from salt_lsp.workspace import SaltLspProto, SlsFileWorkspace
 from salt_lsp.parser import (
     IncludesNode,
@@ -54,6 +53,7 @@ class SaltServer(LanguageServer):
 
         self.logger: logging.Logger = logging.getLogger()
         self._state_names: List[str] = []
+        self.integration_tests: bool = False
 
     @property
     def workspace(self) -> SlsFileWorkspace:
@@ -67,6 +67,7 @@ class SaltServer(LanguageServer):
         self,
         state_name_completions: Dict[str, StateNameCompletion],
         log_level: int = logging.DEBUG,
+        integration_tests: bool = False,
     ) -> None:
         """Further initialisation, called after
         setup_salt_server_capabilities."""
@@ -74,6 +75,7 @@ class SaltServer(LanguageServer):
         self._state_names = list(state_name_completions.keys())
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(log_level)
+        self.integration_tests = integration_tests
 
     def complete_state_name(
         self, params: CompletionParams
@@ -84,7 +86,7 @@ class SaltServer(LanguageServer):
             and params.context.trigger_character == "."
         )
 
-        doc = self.workspace.get_document(params.text_document.uri)
+        doc = self.workspace.get_text_document(params.text_document.uri)
         contents = doc.source
         ind = doc.offset_at_position(params.position)
         last_match = utils.get_last_element_of_iterator(
@@ -168,7 +170,7 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
     def initialize(params: InitializeParams) -> None:
         """Set up custom workspace."""
         del params  # not needed
-        server.lsp.setup_custom_workspace()
+        server.lsp.setup_custom_workspace()  # type: ignore
         server.logger.debug("Replaced workspace with SlsFileWorkspace")
 
     @server.feature(
@@ -236,22 +238,23 @@ def setup_salt_server_capabilities(server: SaltServer) -> None:
     @server.feature(TEXT_DOCUMENT_DID_OPEN)
     def did_open(
         salt_server: SaltServer, params: DidOpenTextDocumentParams
-    ) -> Optional[TextDocumentItem]:
+    ) -> None:
         """Text document did open notification.
 
         This function registers the newly opened file with the salt server.
         """
+        if not salt_server.integration_tests:
+            # The file is registered by the parent class, this is only used
+            # to make integration tests performant while still passing
+            return
         salt_server.logger.debug(
             "adding text document '%s' to the workspace",
             params.text_document.uri,
         )
-        doc = salt_server.workspace.get_document(params.text_document.uri)
-        return TextDocumentItem(
-            uri=params.text_document.uri,
-            language_id=SLS_LANGUAGE_ID,
-            text=params.text_document.text or "",
-            version=doc.version or 0,
-        )
+        # Ensure the document is finished loading
+        salt_server.workspace.get_text_document(params.text_document.uri)
+        # Notify the testing client
+        salt_server.send_notification("saltLsp/loadingFinished")
 
     @server.feature(TEXT_DOCUMENT_DOCUMENT_SYMBOL)
     def document_symbol(

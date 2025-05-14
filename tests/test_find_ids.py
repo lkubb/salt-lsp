@@ -1,26 +1,44 @@
+from pathlib import Path
+
 from lsprotocol.types import (
+    DefinitionParams,
     Location,
     Range,
     Position,
+    TextDocumentIdentifier,
 )
+import pytest
+import pytest_asyncio
+from pytest_lsp import LanguageClient
 
-from conftest import open_file, open_workspace
+from conftest import open_file
+
+pytestmark = [
+    pytest.mark.parametrize("client", ("sample_workspace",), indirect=True),
+]
 
 
-def test_find_id_in_document(salt_client_server, sample_workspace):
-    client, server = salt_client_server
+@pytest_asyncio.fixture
+async def opened_file(
+    client: LanguageClient, sample_workspace: Path, request
+) -> Path:
+    sls = sample_workspace / request.param
+    async with open_file(client, sls):
+        yield sls
 
-    open_workspace(client, f"file://{sample_workspace}")
 
-    base_sls_path = f"{sample_workspace}/opensuse/base.sls"
-    base_sls_uri = "file://" + base_sls_path
-
-    open_file(client, base_sls_path)
-
-    assert server.find_id_in_doc_and_includes(
-        "bernd", base_sls_uri
-    ) == Location(
-        uri=base_sls_uri,
+@pytest.mark.asyncio
+@pytest.mark.parametrize("opened_file", ("opensuse/base.sls",), indirect=True)
+async def test_find_id_in_document(client: LanguageClient, opened_file: Path):
+    results = await client.text_document_definition_async(
+        params=DefinitionParams(
+            position=Position(line=9, character=14),
+            text_document=TextDocumentIdentifier(uri=f"file://{opened_file}"),
+        )
+    )
+    assert results is not None
+    assert results == Location(
+        uri=f"file://{opened_file}",
         range=Range(
             start=Position(line=0, character=0),
             end=Position(line=5, character=0),
@@ -28,41 +46,27 @@ def test_find_id_in_document(salt_client_server, sample_workspace):
     )
 
 
-def test_find_id_in_include(salt_client_server, sample_workspace):
-    client, server = salt_client_server
-
-    open_workspace(client, f"file://{sample_workspace}")
-
-    bar_sls_path = f"{sample_workspace}/bar.sls"
-    bar_sls_uri = "file://" + bar_sls_path
-
-    open_file(client, bar_sls_path)
-
-    assert server.find_id_in_doc_and_includes(
-        "/root/.fishrc", bar_sls_uri
-    ) == Location(
-        uri="file://" + str(sample_workspace / "quo.sls"),
-        range=Range(
-            start=Position(line=0, character=0),
-            end=Position(line=6, character=0),
-        ),
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "opened_file,position",
+    (
+        pytest.param("bar.sls", (6, 8), id="direct"),
+        pytest.param("foo.sls", (7, 8), id="indirect"),
+    ),
+    indirect=("opened_file",),
+)
+async def test_find_id_in_include(
+    client: LanguageClient, opened_file: Path, position: tuple[int, int]
+):
+    results = await client.text_document_definition_async(
+        params=DefinitionParams(
+            position=Position(line=position[0], character=position[1]),
+            text_document=TextDocumentIdentifier(uri=f"file://{opened_file}"),
+        )
     )
-
-
-def test_find_id_in_indirect_include(salt_client_server, sample_workspace):
-    client, server = salt_client_server
-
-    open_workspace(client, f"file://{sample_workspace}")
-
-    foo_sls_path = f"{sample_workspace}/foo.sls"
-    foo_sls_uri = "file://" + foo_sls_path
-
-    open_file(client, foo_sls_path)
-
-    assert server.find_id_in_doc_and_includes(
-        "/root/.fishrc", foo_sls_uri
-    ) == Location(
-        uri="file://" + str(sample_workspace / "quo.sls"),
+    assert results is not None
+    assert results == Location(
+        uri=f"file://{opened_file.parent / 'quo.sls'}",
         range=Range(
             start=Position(line=0, character=0),
             end=Position(line=6, character=0),
