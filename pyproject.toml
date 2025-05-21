@@ -31,8 +31,8 @@ dump_state_name_completions = 'salt_lsp.cmds:dump_state_name_completions'
 pytest-lsp = "^0.4.3"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
