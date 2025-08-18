@@ -1,6 +1,7 @@
 import contextlib
 from pathlib import Path
 import pickle
+from tempfile import TemporaryDirectory
 import sys
 
 from lsprotocol.types import (
@@ -466,7 +467,7 @@ FILE_NAME_COMPLETER = {
 CALL_TIMEOUT = 5
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def state_completions() -> dict[str, StateNameCompletion]:
     return {
         "file": StateNameCompletion(
@@ -478,7 +479,14 @@ def state_completions() -> dict[str, StateNameCompletion]:
 
 
 @pytest.fixture(scope="session")
-def _pickled_path():
+def pickled_default_path():
+    """
+    This fixture is not used currently, left in case we need it at some point.
+    It resolves to the default pickled states data path, ensures it's not present
+    while preserving the data otherwise.
+    Since implementing the --states-data parameter, we don't have to rely on the
+    default path during tests anymore.
+    """
     pickle_path = (
         Path(__file__).parent.parent / "salt_lsp" / "data" / "states.pickle"
     )
@@ -494,45 +502,66 @@ def _pickled_path():
             bak_path.rename(pickle_path)
 
 
-@pytest.fixture
-def pickled_states(_pickled_path, state_completions):
-    with open(_pickled_path, "wb") as states_file:
+@pytest.fixture(scope="module")
+def pickled_states(_pickled_test_path, state_completions):
+    with open(_pickled_test_path, "wb") as states_file:
         pickle.dump(state_completions, states_file)
     try:
-        yield _pickled_path
+        yield _pickled_test_path
     finally:
-        _pickled_path.unlink(missing_ok=True)
+        _pickled_test_path.unlink(missing_ok=True)
 
 
-@pytest_lsp.fixture(
-    config=pytest_lsp.ClientServerConfig(
-        server_command=[
-            sys.executable,
-            "salt_lsp/__main__.py",
-            "--log-level",
-            "debug",
-            "--integration-tests",
-        ]
-    ),
-    params=(None,),
-    ids=lambda x: x or "no_workspace",
-)
-async def client(
-    lsp_client: pytest_lsp.LanguageClient, pickled_states, request
-):
-    root_path = None
-    if request.param:
-        root_path = request.getfixturevalue(request.param)
-    params = InitializeParams(
-        capabilities=ClientCapabilities(), root_path=root_path
+def pytest_sessionstart(session):
+    # We need to create a temporary directory for the test session data.
+    # Since the path needs to be a paramter to ClientServerConfig, which
+    # is not a fixture, we need to create it dynamically here and register
+    # the fixture after (https://github.com/pytest-dev/pytest/issues/2424#issuecomment-333387206).
+    session.config._tempdir = TemporaryDirectory()
+    pickled_states_path = Path(session.config._tempdir.name) / "states.pickle"
+
+    @pytest_lsp.fixture(
+        config=pytest_lsp.ClientServerConfig(
+            server_command=[
+                sys.executable,
+                "salt_lsp/__main__.py",
+                "--log-level",
+                "debug",
+                "--integration-tests",
+                "--states-data",
+                str(pickled_states_path),
+            ]
+        ),
+        params=(None,),
+        ids=lambda x: x or "no_workspace",
     )
-    await lsp_client.initialize_session(params)
+    async def client(
+        lsp_client: pytest_lsp.LanguageClient, pickled_states, request  # pylint: disable=unused-argument
+    ):
+        root_path = None
+        if request.param:
+            root_path = request.getfixturevalue(request.param)
+        params = InitializeParams(
+            capabilities=ClientCapabilities(), root_path=root_path
+        )
+        await lsp_client.initialize_session(params)
 
-    try:
-        yield
-    finally:
-        if not lsp_client.stopped:
-            await lsp_client.shutdown_session()
+        try:
+            yield
+        finally:
+            if not lsp_client.stopped:
+                await lsp_client.shutdown_session()
+
+    @pytest.fixture(scope="session")
+    def _pickled_test_path():
+        return pickled_states_path
+
+    globals()["client"] = client
+    globals()["_pickled_test_path"] = _pickled_test_path
+
+
+def pytest_sessionfinish(session):
+    session.config._tempdir.cleanup()
 
 
 @pytest.fixture()

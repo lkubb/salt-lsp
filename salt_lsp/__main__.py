@@ -1,7 +1,7 @@
 import argparse
 import logging
 import pickle
-from os.path import dirname, abspath, join
+from pathlib import Path
 from typing import Dict
 
 from salt_lsp.server import SaltServer, setup_salt_server_capabilities
@@ -40,12 +40,29 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--stop-after-init",
         action="store_true",
-        help="initialize the server, but don't launch it "
-        "(useful for debugging/testing purposes)",
+        help=(
+            "initialize the server, but don't launch it "
+            "(useful for debugging/testing purposes)",
+        )
     )
     parser.add_argument(
         "--log-file",
         help="Redirect logs to the given file instead of writing to stderr",
+    )
+    parser.add_argument(
+        "--states-data",
+        help=(
+            "Path to the pickled states file. Will be regenerated if it does not exist, "
+            "but requires `salt-call` in this process' PATH."
+        )
+    )
+    parser.add_argument(
+        "--regenerate-states-data",
+        action="store_true",
+        help=(
+            "Regenerate the states data file. This overwrites any existing file. "
+            "Requires `salt-call` in this process' PATH."
+        )
     )
     parser.add_argument(
         "--log-level",
@@ -74,8 +91,31 @@ def main() -> None:
         filemode="w",
     )
 
+    if args.states_data:
+        pickle_file = Path(args.states_data)
+    else:
+        pickle_file = Path(__file__).resolve().parent / "data" / "states.pickle"
+
+    pickle_bak = None
+    if args.regenerate_states_data:
+        if pickle_file.exists():
+            pickle_bak = pickle_file.with_suffix(".bak")
+            pickle_file.rename(pickle_bak)
+    if not pickle_file.exists():
+        try:
+            from salt_lsp.cmds import dump_state_name_completions
+            dump_state_name_completions(pickle_file)
+        except ImportError as err:
+            if pickle_bak:
+                pickle_bak.rename(pickle_file)
+            raise RuntimeError(
+                f"Unable to generate state name completions: {err}"
+            ) from err
+        if pickle_bak:
+            pickle_bak.unlink()
+
     with open(
-        join(dirname(abspath(__file__)), "data", "states.pickle"), "rb"
+        pickle_file, "rb"
     ) as states_file:
         states: Dict[str, StateNameCompletion] = pickle.load(states_file)
 

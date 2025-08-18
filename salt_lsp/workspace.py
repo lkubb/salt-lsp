@@ -2,7 +2,7 @@
 contents utilizing the existing Workspace implementation from pygls.
 
 """
-from logging import WARNING, getLogger, Logger, DEBUG
+from logging import WARNING, getLogger, Logger
 from pathlib import Path
 import sys
 from typing import List, Optional, Union
@@ -59,7 +59,6 @@ class SlsFileWorkspace(Workspace):
         self._state_name_completions = state_name_completions
 
         self.logger: Logger = getLogger(self.__class__.__name__)
-        # FIXME: make this configurable
         self.logger.setLevel(log_level or WARNING)
 
         super().__init__(*args, **kwargs)
