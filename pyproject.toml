@@ -11,23 +11,22 @@ python = "^3.9,<3.12"
 pygls = "^1.0"
 PyYAML = "^6"
 
-[tool.poetry.dev-dependencies]
-pytest = ">=6.2.3"
-pytest-cov = ">=2.11.1"
-black = ">=21.10b0"
-mypy = ">=0.812"
-pylint = ">=2.7.4"
-pyfakefs = ">=4.4.0"
-salt = "^3006"
-pytest-testinfra = ">=6.7.0"
-types-PyYAML = "^6"
-
 [tool.poetry.scripts]
 salt_lsp_server = 'salt_lsp.__main__:main'
 dump_state_name_completions = 'salt_lsp.cmds:dump_state_name_completions'
 
 [tool.poetry.group.dev.dependencies]
+pytest = ">=8"
+pytest-cov = ">=6"
 pytest-lsp = "^0.4.3"
+pytest-testinfra = ">=10"
+black = "==25.1.0"
+isort = "==6.0.1"
+mypy = ">=1"
+pylint = ">=3"
+pyfakefs = ">=5"
+salt = "^3006"
+types-PyYAML = "^6"
 
 [build-system]
 requires = ["poetry-core"]

@@ -542,7 +542,7 @@ def pytest_sessionstart(session):
         if request.param:
             root_path = request.getfixturevalue(request.param)
         params = InitializeParams(
-            capabilities=ClientCapabilities(), root_path=root_path
+            capabilities=ClientCapabilities(), root_path=str(root_path)
         )
         await lsp_client.initialize_session(params)
 
