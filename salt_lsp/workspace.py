@@ -4,7 +4,6 @@ contents utilizing the existing Workspace implementation from pygls.
 """
 from logging import WARNING, getLogger, Logger
 from pathlib import Path
-import sys
 from typing import List, Optional, Union
 
 from lsprotocol import types
@@ -15,23 +14,6 @@ from salt_lsp.base_types import CompletionsDict, SLS_LANGUAGE_ID
 from salt_lsp.utils import UriDict, FileUri, get_top
 from salt_lsp.parser import parse, Tree
 from salt_lsp.document_symbols import tree_to_document_symbols
-
-
-if sys.version_info[1] <= 8:
-
-    def is_relative_to(p1: Path, p2: Path) -> bool:
-        # stolen from CPython's source
-        """Return True if the path is relative to another path or False."""
-        try:
-            p1.relative_to(p2)
-            return True
-        except ValueError:
-            return False
-
-else:
-
-    def is_relative_to(p1: Path, p2: Path) -> bool:
-        return p1.is_relative_to(p2)
 
 
 class SlsFileWorkspace(Workspace):
@@ -153,9 +135,7 @@ class SlsFileWorkspace(Workspace):
 
     def _get_workspace_of_document(self, uri: Union[str, FileUri]) -> FileUri:
         for workspace_uri in self._folders:
-            if is_relative_to(
-                Path(FileUri(uri).path), Path(FileUri(workspace_uri).path)
-            ):
+            if Path(FileUri(uri).path).is_relative_to(FileUri(workspace_uri).path):
                 return FileUri(workspace_uri)
 
         return self.root_uri
