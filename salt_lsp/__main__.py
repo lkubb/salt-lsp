@@ -4,11 +4,10 @@ import pickle
 from pathlib import Path
 from typing import Dict
 
-from salt_lsp.server import SaltServer, setup_salt_server_capabilities
 from salt_lsp.base_types import StateNameCompletion
+from salt_lsp.server import SaltServer, setup_salt_server_capabilities
 
-
-LOG_LEVEL_DICT: Dict[str, int] = {
+LOG_LEVEL_DICT: dict[str, int] = {
     "critical": logging.CRITICAL,
     "fatal": logging.FATAL,
     "error": logging.ERROR,
@@ -31,19 +30,15 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tcp", action="store_true", help="Use TCP server instead of stdio"
     )
-    parser.add_argument(
-        "--host", default="127.0.0.1", help="Bind to this address"
-    )
-    parser.add_argument(
-        "--port", type=int, default=2087, help="Bind to this port"
-    )
+    parser.add_argument("--host", default="127.0.0.1", help="Bind to this address")
+    parser.add_argument("--port", type=int, default=2087, help="Bind to this port")
     parser.add_argument(
         "--stop-after-init",
         action="store_true",
         help=(
             "initialize the server, but don't launch it "
             "(useful for debugging/testing purposes)",
-        )
+        ),
     )
     parser.add_argument(
         "--log-file",
@@ -54,7 +49,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "Path to the pickled states file. Will be regenerated if it does not exist, "
             "but requires `salt-call` in this process' PATH."
-        )
+        ),
     )
     parser.add_argument(
         "--regenerate-states-data",
@@ -62,7 +57,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "Regenerate the states data file. This overwrites any existing file. "
             "Requires `salt-call` in this process' PATH."
-        )
+        ),
     )
     parser.add_argument(
         "--log-level",
@@ -104,6 +99,7 @@ def main() -> None:
     if not pickle_file.exists():
         try:
             from salt_lsp.cmds import dump_state_name_completions
+
             dump_state_name_completions(pickle_file)
         except ImportError as err:
             if pickle_bak:
@@ -114,10 +110,8 @@ def main() -> None:
         if pickle_bak:
             pickle_bak.unlink()
 
-    with open(
-        pickle_file, "rb"
-    ) as states_file:
-        states: Dict[str, StateNameCompletion] = pickle.load(states_file)
+    with open(pickle_file, "rb") as states_file:
+        states: dict[str, StateNameCompletion] = pickle.load(states_file)
 
     salt_server = SaltServer()
     setup_salt_server_capabilities(salt_server, log_level)

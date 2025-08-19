@@ -1,17 +1,16 @@
 from pathlib import Path
 
+import pytest
+import pytest_asyncio
+from conftest import open_file
 from lsprotocol.types import (
     DefinitionParams,
     Location,
-    Range,
     Position,
+    Range,
     TextDocumentIdentifier,
 )
-import pytest
-import pytest_asyncio
 from pytest_lsp import LanguageClient
-
-from conftest import open_file
 
 pytestmark = [
     pytest.mark.parametrize("client", ("sample_workspace",), indirect=True),
@@ -19,9 +18,7 @@ pytestmark = [
 
 
 @pytest_asyncio.fixture
-async def opened_file(
-    client: LanguageClient, sample_workspace: Path, request
-) -> Path:
+async def opened_file(client: LanguageClient, sample_workspace: Path, request) -> Path:
     sls = sample_workspace / request.param
     async with open_file(client, sls):
         yield sls

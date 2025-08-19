@@ -1,18 +1,19 @@
 """
 Module defining and building an AST from the SLS file.
 """
+
 from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from os.path import abspath, dirname, exists, isdir, join
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Callable, List, Optional, Tuple, Union, cast
 
-from lsprotocol import types
 import yaml
+from lsprotocol import types
 from yaml.tokens import BlockEndToken, ScalarToken
-
 
 log = logging.getLogger(__name__)
 
@@ -30,18 +31,14 @@ class Position:
         if not isinstance(other, Position):
             return NotImplemented
         return (
-            self.line < other.line
-            or self.line == other.line
-            and self.col < other.col
+            self.line < other.line or self.line == other.line and self.col < other.col
         )
 
     def __gt__(self, other):
         if not isinstance(other, Position):
             return NotImplemented
         return (
-            self.line > other.line
-            or self.line == other.line
-            and self.col > other.col
+            self.line > other.line or self.line == other.line and self.col > other.col
         )
 
     def __le__(self, other):
@@ -142,7 +139,7 @@ class IncludesNode(AstNode):
     Node representing the list of includes
     """
 
-    includes: List[IncludeNode] = field(default_factory=list)
+    includes: list[IncludeNode] = field(default_factory=list)
 
     def add(self: IncludesNode) -> IncludeNode:
         """
@@ -182,9 +179,7 @@ class StateParameterNode(AstNode):
             + [k + "_any" for k in requisites_keys]
             + [k + "_in" for k in requisites_keys]
         )
-        if key in all_requisites_keys and isinstance(
-            self.parent, StateCallNode
-        ):
+        if key in all_requisites_keys and isinstance(self.parent, StateCallNode):
             return self.parent.convert(self, key)
         self.name = key
         return self
@@ -217,7 +212,7 @@ class RequisitesNode(AstMapNode):
     """
 
     kind: Optional[str] = None
-    requisites: List[RequisiteNode] = field(default_factory=list)
+    requisites: list[RequisiteNode] = field(default_factory=list)
 
     def set_key(self: RequisitesNode, key: str) -> AstNode:
         """
@@ -268,8 +263,8 @@ class StateCallNode(AstMapNode):
     """
 
     name: Optional[str] = None
-    parameters: List[StateParameterNode] = field(default_factory=list)
-    requisites: List[RequisitesNode] = field(default_factory=list)
+    parameters: list[StateParameterNode] = field(default_factory=list)
+    requisites: list[RequisitesNode] = field(default_factory=list)
 
     def add(self: StateCallNode) -> AstNode:
         """
@@ -287,9 +282,7 @@ class StateCallNode(AstMapNode):
         self.name = key
         return self
 
-    def convert(
-        self: StateCallNode, param: StateParameterNode, name: str
-    ) -> AstNode:
+    def convert(self: StateCallNode, param: StateParameterNode, name: str) -> AstNode:
         """
         Convert a parameter entry to a requisite one
         """
@@ -302,8 +295,8 @@ class StateCallNode(AstMapNode):
         """
         Returns all the children nodes
         """
-        return cast(List[AstNode], self.parameters) + cast(
-            List[AstNode], self.requisites
+        return cast(list[AstNode], self.parameters) + cast(
+            list[AstNode], self.requisites
         )
 
 
@@ -321,7 +314,7 @@ class StateNode(AstMapNode):
     """
 
     identifier: Optional[str] = None
-    states: List[StateCallNode] = field(default_factory=list)
+    states: list[StateCallNode] = field(default_factory=list)
 
     def add(self: StateNode) -> AstNode:
         """
@@ -357,7 +350,7 @@ class ExtendNode(AstMapNode):
     Node representing an ``extend`` declaration
     """
 
-    states: List[StateNode] = field(default_factory=list)
+    states: list[StateNode] = field(default_factory=list)
 
     def add(self: ExtendNode) -> AstNode:
         """
@@ -383,7 +376,7 @@ class Tree(AstMapNode):
 
     includes: Optional[IncludesNode] = None
     extend: Optional[ExtendNode] = None
-    states: List[StateNode] = field(default_factory=list)
+    states: list[StateNode] = field(default_factory=list)
 
     def add(self: Tree) -> AstNode:
         """
@@ -426,9 +419,9 @@ class Tree(AstMapNode):
         extend = [self.extend] if self.extend else []
 
         return (
-            cast(List[AstNode], includes)
-            + cast(List[AstNode], extend)
-            + cast(List[AstNode], self.states)
+            cast(list[AstNode], includes)
+            + cast(list[AstNode], extend)
+            + cast(list[AstNode], self.states)
         )
 
 
@@ -442,9 +435,7 @@ class TokenNode(AstNode):
 
     def __init__(self: TokenNode, token: yaml.Token) -> None:
         super().__init__(
-            start=Position(
-                line=token.start_mark.line, col=token.start_mark.column
-            ),
+            start=Position(line=token.start_mark.line, col=token.start_mark.column),
             end=Position(line=token.end_mark.line, col=token.end_mark.column),
         )
         self.token = token
@@ -473,9 +464,9 @@ class Parser:
         """
         self.document = document
         self._tree = Tree()
-        self._breadcrumbs: List[AstNode] = [self._tree]
-        self._block_starts: List[
-            Tuple[
+        self._breadcrumbs: list[AstNode] = [self._tree]
+        self._block_starts: list[
+            tuple[
                 Union[
                     yaml.BlockMappingStartToken,
                     yaml.BlockSequenceStartToken,
@@ -490,19 +481,15 @@ class Parser:
         #: => if applicable, the next token will be a value, unless a block is
         #:    started
         self._next_token_is_value = False
-        self._unprocessed_tokens: Optional[List[TokenNode]] = None
+        self._unprocessed_tokens: Optional[list[TokenNode]] = None
         self._last_start: Optional[Position] = None
 
     def _process_token(self: Parser, token: yaml.Token) -> None:
         """
         Process one token
         """
-        token_start = Position(
-            line=token.start_mark.line, col=token.start_mark.column
-        )
-        token_end = Position(
-            line=token.end_mark.line, col=token.end_mark.column
-        )
+        token_start = Position(line=token.start_mark.line, col=token.start_mark.column)
+        token_end = Position(line=token.end_mark.line, col=token.end_mark.column)
         if isinstance(token, yaml.StreamStartToken):
             self._tree.start = token_start
         if isinstance(token, yaml.StreamEndToken):
@@ -606,9 +593,7 @@ class Parser:
 
         if isinstance(token, yaml.KeyToken):
             self._next_scalar_as_key = True
-            if isinstance(
-                self._breadcrumbs[-1], AstMapNode
-            ) and not isinstance(
+            if isinstance(self._breadcrumbs[-1], AstMapNode) and not isinstance(
                 self._breadcrumbs[-1], (RequisiteNode, StateParameterNode)
             ):
                 self._breadcrumbs.append(self._breadcrumbs[-1].add())
@@ -636,12 +621,8 @@ class Parser:
                 self._breadcrumbs[-1].start = token_start
 
         if isinstance(token, yaml.ScalarToken):
-            if self._next_scalar_as_key and getattr(
-                self._breadcrumbs[-1], "set_key"
-            ):
-                changed = getattr(self._breadcrumbs[-1], "set_key")(
-                    token.value
-                )
+            if self._next_scalar_as_key and getattr(self._breadcrumbs[-1], "set_key"):
+                changed = getattr(self._breadcrumbs[-1], "set_key")(token.value)
                 # If the changed node isn't the same than the one we called the
                 # function on, that means that the node had to be converted and
                 # we need to update the breadcrumbs too.

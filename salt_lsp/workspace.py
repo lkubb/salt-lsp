@@ -2,7 +2,8 @@
 contents utilizing the existing Workspace implementation from pygls.
 
 """
-from logging import WARNING, getLogger, Logger
+
+from logging import WARNING, Logger, getLogger
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -10,10 +11,10 @@ from lsprotocol import types
 from pygls.protocol import LanguageServerProtocol
 from pygls.workspace import Workspace
 
-from salt_lsp.base_types import CompletionsDict, SLS_LANGUAGE_ID
-from salt_lsp.utils import UriDict, FileUri, get_top
-from salt_lsp.parser import parse, Tree
+from salt_lsp.base_types import SLS_LANGUAGE_ID, CompletionsDict
 from salt_lsp.document_symbols import tree_to_document_symbols
+from salt_lsp.parser import Tree, parse
+from salt_lsp.utils import FileUri, UriDict, get_top
 
 
 class SlsFileWorkspace(Workspace):
@@ -25,16 +26,20 @@ class SlsFileWorkspace(Workspace):
     """
 
     def __init__(
-        self, state_name_completions: CompletionsDict, *args, log_level: Optional[int] = None, **kwargs
+        self,
+        state_name_completions: CompletionsDict,
+        *args,
+        log_level: Optional[int] = None,
+        **kwargs,
     ) -> None:
         #: dictionary containing the parsed contents of all tracked documents
         self._trees: UriDict[Tree] = UriDict()
 
         #: document symbols of all tracked documents
-        self._document_symbols: UriDict[List[types.DocumentSymbol]] = UriDict()
+        self._document_symbols: UriDict[list[types.DocumentSymbol]] = UriDict()
 
         #: included FileUris of every tracked document
-        self._includes: UriDict[List[FileUri]] = UriDict()
+        self._includes: UriDict[list[FileUri]] = UriDict()
 
         #: top path corresponding to every workspace folder
         self._top_paths: UriDict[Optional[FileUri]] = UriDict()
@@ -53,18 +58,16 @@ class SlsFileWorkspace(Workspace):
         return self._trees
 
     @property
-    def document_symbols(self) -> UriDict[List[types.DocumentSymbol]]:
+    def document_symbols(self) -> UriDict[list[types.DocumentSymbol]]:
         """The document symbols of each SLS files in the workspace."""
         return self._document_symbols
 
     @property
-    def includes(self) -> UriDict[List[FileUri]]:
+    def includes(self) -> UriDict[list[FileUri]]:
         """The list of includes of each SLS file in the workspace."""
         return self._includes
 
-    def _resolve_includes(
-        self, text_document_uri: Union[str, FileUri]
-    ) -> None:
+    def _resolve_includes(self, text_document_uri: Union[str, FileUri]) -> None:
         if (
             (tree := self._trees[text_document_uri]) is None
             or tree.includes is None
@@ -73,10 +76,7 @@ class SlsFileWorkspace(Workspace):
             return
 
         ws_folder = self._get_workspace_of_document(text_document_uri)
-        if (
-            ws_folder in self._top_paths
-            and self._top_paths[ws_folder] is not None
-        ):
+        if ws_folder in self._top_paths and self._top_paths[ws_folder] is not None:
             top_path = self._top_paths[ws_folder]
         else:
             top_path = ws_folder
@@ -99,7 +99,7 @@ class SlsFileWorkspace(Workspace):
                     inc,
                     text_document_uri,
                 )
-                with open(inc.path, "r") as inc_file:
+                with open(inc.path) as inc_file:
                     self.put_text_document(
                         types.TextDocumentItem(
                             uri=str(inc),

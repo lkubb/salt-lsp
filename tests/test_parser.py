@@ -1,3 +1,5 @@
+from lsprotocol.types import Position
+
 from salt_lsp.parser import (
     RequisiteNode,
     RequisitesNode,
@@ -8,9 +10,6 @@ from salt_lsp.parser import (
     parse,
 )
 from salt_lsp.utils import construct_path_to_position
-
-from lsprotocol.types import Position
-
 
 MASTER_DOT_SLS = """saltmaster.packages:
   pkg.installed:

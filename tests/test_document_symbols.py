@@ -3,7 +3,6 @@ from lsprotocol import types
 from salt_lsp.document_symbols import tree_to_document_symbols
 from salt_lsp.parser import parse
 
-
 SLS_FILE = """include:
   - opensuse
 

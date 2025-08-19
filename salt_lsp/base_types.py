@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-
 SLS_LANGUAGE_ID = "sls"
 
 
@@ -20,24 +19,22 @@ class StateNameCompletion:
     def __init__(
         self,
         state_name: str,
-        state_params: List[Any],
-        module_docs: Dict[str, str],
+        state_params: list[Any],
+        module_docs: dict[str, str],
     ) -> None:
         self.state_name = state_name
-        self.state_params: Dict[str, StateParameters] = {}
+        self.state_params: dict[str, StateParameters] = {}
         self.state_docs: Optional[str] = module_docs.get(state_name)
 
         for submod in state_params:
             submod_name = next(iter(submod.keys()))
             docs = module_docs.get(f"{state_name}.{submod_name}")
 
-            self.state_params[submod_name] = StateParameters(
-                submod[submod_name], docs
-            )
+            self.state_params[submod_name] = StateParameters(submod[submod_name], docs)
 
-        self.state_sub_names: List[str] = list(self.state_params.keys())
+        self.state_sub_names: list[str] = list(self.state_params.keys())
 
-    def provide_subname_completion(self) -> List[Tuple[str, Optional[str]]]:
+    def provide_subname_completion(self) -> list[tuple[str, Optional[str]]]:
         """
         This function provides the names and docstrings of the submodules of
         this state.
@@ -51,8 +48,8 @@ class StateNameCompletion:
             for name, state_params in self.state_params.items()
         ]
 
-    def provide_param_completion(self, submod_name: str) -> List[str]:
+    def provide_param_completion(self, submod_name: str) -> list[str]:
         return list(self.state_params[submod_name].parameters.keys())
 
 
-CompletionsDict = Dict[str, StateNameCompletion]
+CompletionsDict = dict[str, StateNameCompletion]

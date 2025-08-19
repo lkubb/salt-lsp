@@ -1,20 +1,19 @@
 import contextlib
-from pathlib import Path
 import pickle
-from tempfile import TemporaryDirectory
 import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from lsprotocol.types import (
-    ClientCapabilities,
-    InitializeParams,
-    DidOpenTextDocumentParams,
-    TextDocumentItem,
-)
 import pytest
 import pytest_lsp
+from lsprotocol.types import (
+    ClientCapabilities,
+    DidOpenTextDocumentParams,
+    InitializeParams,
+    TextDocumentItem,
+)
 
-from salt_lsp.base_types import StateNameCompletion, SLS_LANGUAGE_ID
-
+from salt_lsp.base_types import SLS_LANGUAGE_ID, StateNameCompletion
 
 MODULE_DOCS = {
     "file": "doc of file",
@@ -487,9 +486,7 @@ def pickled_default_path():
     Since implementing the --states-data parameter, we don't have to rely on the
     default path during tests anymore.
     """
-    pickle_path = (
-        Path(__file__).parent.parent / "salt_lsp" / "data" / "states.pickle"
-    )
+    pickle_path = Path(__file__).parent.parent / "salt_lsp" / "data" / "states.pickle"
     bak_path = None
     if pickle_path.exists():
         bak_path = pickle_path.with_suffix(".pickle.bak")
@@ -536,7 +533,9 @@ def pytest_sessionstart(session):
         ids=lambda x: x or "no_workspace",
     )
     async def client(
-        lsp_client: pytest_lsp.LanguageClient, pickled_states, request  # pylint: disable=unused-argument
+        lsp_client: pytest_lsp.LanguageClient,
+        pickled_states,
+        request,  # pylint: disable=unused-argument
     ):
         root_path = None
         if request.param:
@@ -662,9 +661,7 @@ bar:
 
 
 @contextlib.asynccontextmanager
-async def open_file(
-    client: pytest_lsp.LanguageClient, file_path: Path
-) -> Path:
+async def open_file(client: pytest_lsp.LanguageClient, file_path: Path) -> Path:
     with open(file_path) as sls:
         client.text_document_did_open(
             DidOpenTextDocumentParams(

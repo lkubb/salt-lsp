@@ -4,22 +4,13 @@ Utility functions to extract data from the files
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
 import os
 import os.path
 import shlex
 import subprocess
-from typing import (
-    Dict,
-    Generic,
-    Iterator,
-    List,
-    NewType,
-    Optional,
-    TypeVar,
-    Union,
-)
-from urllib.parse import urlparse, ParseResult
+from collections.abc import Iterator, MutableMapping
+from typing import Dict, Generic, List, NewType, Optional, TypeVar, Union
+from urllib.parse import ParseResult, urlparse
 
 from lsprotocol.types import Position, Range
 
@@ -63,7 +54,7 @@ def get_root(path: str) -> Optional[str]:
     return root or get_git_root(path)
 
 
-def get_sls_includes(path: str) -> List[str]:
+def get_sls_includes(path: str) -> list[str]:
     sls_files = []
     top = get_root(path)
     if not top:
@@ -78,14 +69,12 @@ def get_sls_includes(path: str) -> List[str]:
     return sls_files
 
 
-def construct_path_to_position(tree: Tree, pos: Position) -> List[AstNode]:
+def construct_path_to_position(tree: Tree, pos: Position) -> list[AstNode]:
     found_node = None
     parser_pos = parser.Position(line=pos.line, col=pos.character)
 
     def visitor(node: AstNode) -> bool:
-        if node.start <= parser_pos and (
-            node.end is None or parser_pos <= node.end
-        ):
+        if node.start <= parser_pos and (node.end is None or parser_pos <= node.end):
             nonlocal found_node
             found_node = node
         return True
@@ -95,7 +84,7 @@ def construct_path_to_position(tree: Tree, pos: Position) -> List[AstNode]:
     if not found_node:
         return []
 
-    context: List[AstNode] = []
+    context: list[AstNode] = []
     node: Optional[AstNode] = found_node
     while node:
         context.insert(0, node)
@@ -157,7 +146,7 @@ class UriDict(Generic[T], MutableMapping):
     """
 
     def __init__(self, *args, **kwargs):
-        self._data: Dict[str, T] = {}
+        self._data: dict[str, T] = {}
         self.update(dict(*args, **kwargs))
 
     def __getitem__(self, key: U) -> T:

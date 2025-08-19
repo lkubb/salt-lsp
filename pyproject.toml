@@ -23,6 +23,7 @@ pytest-testinfra = ">=10"
 black = "==25.1.0"
 isort = "==6.0.1"
 mypy = ">=1"
+pre_commit = ">=4"
 pylint = ">=3"
 pyfakefs = ">=5"
 salt = "^3006"
@@ -37,5 +38,5 @@ testpaths = ["tests"]
 addopts = "-vv --cov=salt_lsp --cov-report term --cov-report html --cov-report xml --cov-branch"
 xfail_strict = true
 
-[tool.black]
-line-length = 79
+[tool.isort]
+profile = "black"

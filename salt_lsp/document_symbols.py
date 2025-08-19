@@ -2,26 +2,28 @@
 Implementation of the DocumentSymbolsRequest, see:
 https://microsoft.github.io/language-server-protocol/specification#textDocument_documentSymbol
 """
-from dataclasses import dataclass, field
+
 import itertools
-from typing import Callable, Dict, List, Sequence, TypedDict, cast
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, TypedDict, cast
 
 from lsprotocol import types
 
+from salt_lsp.base_types import CompletionsDict
 from salt_lsp.parser import (
     AstNode,
-    Tree,
-    Optional,
+    ExtendNode,
     IncludeNode,
     IncludesNode,
-    StateParameterNode,
-    StateCallNode,
-    StateNode,
+    Optional,
     RequisiteNode,
     RequisitesNode,
-    ExtendNode,
+    StateCallNode,
+    StateNode,
+    StateParameterNode,
+    Tree,
 )
-from salt_lsp.base_types import CompletionsDict
 from salt_lsp.utils import ast_node_to_range
 
 
@@ -39,12 +41,10 @@ class DocumentSymbolKWArgs(TypedDict):
 
 #: Dictionary containing functions that convert the AstNode subclasses to their
 #: string identifier
-NODE_IDENTIFIERS: Dict[str, Callable[[AstNode], Optional[str]]] = {
+NODE_IDENTIFIERS: dict[str, Callable[[AstNode], Optional[str]]] = {
     IncludeNode.__name__: lambda node: cast(IncludeNode, node).value,
     IncludesNode.__name__: lambda node: "includes",
-    StateParameterNode.__name__: lambda node: cast(
-        StateParameterNode, node
-    ).name,
+    StateParameterNode.__name__: lambda node: cast(StateParameterNode, node).name,
     StateCallNode.__name__: lambda node: cast(StateCallNode, node).name,
     StateNode.__name__: lambda node: cast(StateNode, node).identifier,
     RequisiteNode.__name__: lambda node: cast(RequisiteNode, node).module,
@@ -75,9 +75,7 @@ def _get_doc_from_module_name(
         if completer is None:
             return None
         submod_params = completer.state_params.get(submod_name)
-        return (
-            submod_params.documentation if submod_params is not None else None
-        )
+        return submod_params.documentation if submod_params is not None else None
 
     completer = state_completions.get(mod_name)
     return completer.state_docs if completer is not None else None
@@ -85,7 +83,7 @@ def _get_doc_from_module_name(
 
 #: Dictionary of functions that return the documentation of a AstNode given the
 #: AstNode and the CompletionsDict
-DETAIL_OF_NODE_CONSTRUCTOR: Dict[
+DETAIL_OF_NODE_CONSTRUCTOR: dict[
     str, Callable[[AstNode, CompletionsDict], Optional[str]]
 ] = {
     RequisiteNode.__name__: _get_doc_from_module_name,
@@ -104,13 +102,11 @@ See also: https://docs.saltproject.io/en/latest/ref/states/requisites.html
 
 def get_children(
     node: AstNode, state_completions: CompletionsDict
-) -> List[types.DocumentSymbol]:
+) -> list[types.DocumentSymbol]:
     children: Sequence[AstNode] = []
     if isinstance(node, IncludesNode):
         children = node.includes
-    elif isinstance(
-        node, (ExtendNode, RequisitesNode, StateCallNode, StateNode)
-    ):
+    elif isinstance(node, (ExtendNode, RequisitesNode, StateCallNode, StateNode)):
         children = node.get_children()
     else:
         return []
@@ -126,9 +122,9 @@ def get_children(
 def _document_symbol_init_kwargs(
     node: AstNode,
 ) -> Optional[DocumentSymbolKWArgs]:
-    string_identifier = NODE_IDENTIFIERS.get(
-        type(node).__name__, lambda node: None
-    )(node)
+    string_identifier = NODE_IDENTIFIERS.get(type(node).__name__, lambda node: None)(
+        node
+    )
     symbol_kind = (
         types.SymbolKind.String
         if isinstance(node, IncludeNode)
@@ -164,7 +160,7 @@ class Visitor:
 
     #: The resulting document symbols created from the AstNode are saved in
     #: this field
-    document_symbols: List[types.DocumentSymbol] = field(default_factory=list)
+    document_symbols: list[types.DocumentSymbol] = field(default_factory=list)
 
     #: The visitor uses this attribute to obtain the documentation of certain
     #: AstNodes.
@@ -196,7 +192,7 @@ class Visitor:
 
 def tree_to_document_symbols(
     tree: Tree, state_completions: CompletionsDict
-) -> List[types.DocumentSymbol]:
+) -> list[types.DocumentSymbol]:
     res = []
 
     for elem in itertools.chain.from_iterable(

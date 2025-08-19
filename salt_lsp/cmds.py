@@ -11,7 +11,7 @@ from salt_lsp.base_types import StateNameCompletion
 
 
 def dump_state_name_completions(target: Optional[Union[str, Path]] = None) -> None:
-    state_completions: Dict[str, StateNameCompletion] = {}
+    state_completions: dict[str, StateNameCompletion] = {}
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         salt_dest = Path(tmpdirname) / "salt"

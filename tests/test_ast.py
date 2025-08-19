@@ -1,7 +1,8 @@
+from typing import Callable
+
 import yaml
 
 from salt_lsp.parser import *
-from typing import Callable
 
 
 class TestIncludeNode:
@@ -405,7 +406,7 @@ def test_empty_requisite_item():
     - group: root
     - require:
       - file: /foo/bar
-      - 
+      -
 
 git -C /srv/salt pull -q:
   cron.present:

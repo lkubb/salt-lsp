@@ -3,17 +3,17 @@ import os
 import pytest
 from lsprotocol import types
 
+from salt_lsp.parser import IncludeNode, Position
 from salt_lsp.utils import (
+    FileUri,
+    Uri,
+    UriDict,
     ast_node_to_range,
     get_git_root,
     get_last_element_of_iterator,
     get_top,
     is_valid_file_uri,
-    FileUri,
-    UriDict,
-    Uri,
 )
-from salt_lsp.parser import IncludeNode, Position
 
 
 def test_last_element_of_range():

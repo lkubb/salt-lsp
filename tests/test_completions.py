@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+import pytest_asyncio
+from conftest import MODULE_DOCS, open_file
 from lsprotocol.types import (
     CompletionContext,
     CompletionList,
@@ -8,13 +11,9 @@ from lsprotocol.types import (
     Position,
     TextDocumentIdentifier,
 )
-import pytest
-import pytest_asyncio
 from pytest_lsp import LanguageClient
 
-from conftest import MODULE_DOCS, open_file
 from salt_lsp.base_types import StateNameCompletion
-
 
 TEST_FILE = """saltmaster.packages:
   pkg.installed:
